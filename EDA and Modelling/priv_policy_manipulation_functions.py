@@ -8,6 +8,7 @@ import yaml
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+
 def load_all_policies():
     
     # Load the first policy into a dataframe
@@ -33,6 +34,9 @@ def load_all_policies():
     
     return all_policies_df
 
+
+
+###
 
 def add_metadata_to_policy_df(input_policies_df):
     
@@ -63,6 +67,9 @@ def add_metadata_to_policy_df(input_policies_df):
     return all_policies_df
 
 
+
+###
+
 def generate_segment_df(all_policies_df):
     
     # First create this for a single policy. Then loop through all the policies to apply the same manipulation.
@@ -88,3 +95,41 @@ def generate_segment_df(all_policies_df):
     segment_df = segment_df[['source_policy_number', 'policy_segment_id', 'segment_text', 'annotations', 'sentences']]
     
     return segment_df
+
+
+
+###
+
+def get_list_of_practice_groups():
+    """
+    Requires the folder "APP_350_v1_1" to be in the same directory as this file.
+    
+    Returns a list where each element is a list of practices, representing a category of practices
+    e.g. ['Contact_E_Mail_Address_1stParty', 'Contact_E_Mail_Address_3rdParty']
+    There are 29 categories.    
+    
+    A full list of individual practices can then be optained with a list comprehension: 
+    
+    list_of_practices = [practice for practice_group in list_of_practice_groups for practice in practice_group]
+    There are 58 individual practices.
+   
+    """
+    with open("APP_350_v1_1/features.yml", "r") as stream:
+        try:
+            features_yml = (json_normalize(yaml.safe_load(stream)))
+        except yaml.YAMLError as exc:
+            print(exc)
+    
+    data_types = json_normalize(features_yml['data_types'])
+    
+    list_of_practice_groups = []
+    practice_groups = range(len(data_types.columns))
+    
+    for i in practice_groups:
+        practices_and_features = json_normalize(data_types[i])
+
+        list_of_practice_groups.extend(practices_and_features['practices'])
+    
+    print(f"{len(list_of_practice_groups)} different groups of practices returned, containing {len([practice for practice_group in list_of_practice_groups for practice in practice_group])} individual practices.")
+    
+    return list_of_practice_groups
