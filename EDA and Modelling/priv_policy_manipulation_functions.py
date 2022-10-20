@@ -76,16 +76,21 @@ def generate_segment_df(all_policies_df):
     initial_segment = all_policies_df.loc[0,"segments"]
     initial_segment_df = json_normalize(initial_segment) # normalise it
     initial_segment_df.set_index('segment_id', inplace=True)
+    # copy over some other columns
     initial_segment_df["source_policy_number"] = all_policies_df.loc[0,"policy_id"]
+    initial_segment_df["policy_type"] = all_policies_df.loc[0,"policy_type"]
+    initial_segment_df["contains_synthetic"] = all_policies_df.loc[0,"contains_synthetic"]
 
     segment_df = initial_segment_df
     
-    for i in all_policies_df.index:
+    for i in all_policies_df.index: # loop through each policy
         
         this_segment = all_policies_df.loc[i,"segments"]
         this_segment_df = json_normalize(this_segment) # normalise it
         this_segment_df.set_index('segment_id', inplace=True)
         this_segment_df["source_policy_number"] = all_policies_df.loc[i,"policy_id"]
+        this_segment_df["policy_type"] = all_policies_df.loc[i,"policy_type"]
+        this_segment_df["contains_synthetic"] = all_policies_df.loc[i,"contains_synthetic"]
 
         segment_df = pd.concat( [segment_df, this_segment_df], axis=0 ) 
     
@@ -93,10 +98,9 @@ def generate_segment_df(all_policies_df):
     segment_df['policy_segment_id'] = segment_df.index
     segment_df.reset_index(drop=True, inplace=True)
     segment_df.index.names = ['segment_id']
-    segment_df = segment_df[['source_policy_number', 'policy_segment_id', 'segment_text', 'annotations', 'sentences']]
+    segment_df = segment_df[['source_policy_number', 'policy_type', 'contains_synthetic', 'policy_segment_id', 'segment_text', 'annotations', 'sentences']]
     
     return segment_df
-
 
 
 ###
@@ -134,3 +138,20 @@ def get_list_of_practice_groups():
     print(f"{len(list_of_practice_groups)} different groups of practices returned, containing {len([practice for practice_group in list_of_practice_groups for practice in practice_group])} individual practices.")
     
     return list_of_practice_groups
+
+
+###
+
+
+def add_empty_annotation_columns(dataframe, list_of_practices):
+    # append empty annotation columns to the dataframe specified and returns a new dataframe.
+
+    empty_annotations = pd.DataFrame( data = 0, columns = list_of_practices, index = range(len(dataframe)) ) 
+    # make the list of annotations into columns
+
+    dataframe_with_empty_annots = pd.concat([dataframe, empty_annotations], axis=1) 
+    # put the columns onto the segment dataframe
+
+    print(f"The shape of the returned dataframe is {dataframe_with_empty_annots.shape}") # Verify
+
+    return dataframe_with_empty_annots
