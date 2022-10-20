@@ -89,6 +89,7 @@ def generate_segment_df(all_policies_df):
 
         segment_df = pd.concat( [segment_df, this_segment_df], axis=0 ) 
     
+    # Tidy indexes and columns
     segment_df['policy_segment_id'] = segment_df.index
     segment_df.reset_index(drop=True, inplace=True)
     segment_df.index.names = ['segment_id']
