@@ -8,6 +8,8 @@ import yaml
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from sklearn.feature_extraction.text import CountVectorizer
+
 
 def load_all_policies():
     
@@ -155,3 +157,37 @@ def add_empty_annotation_columns(dataframe, list_of_practices):
     print(f"The shape of the returned dataframe is {dataframe_with_empty_annots.shape}") # Verify
 
     return dataframe_with_empty_annots
+
+
+
+###
+
+
+
+# code taken from https://app.neptune.ai/neptune-ai/eda-nlp-tools/n/0-0-eda-nlp-million-headlines-f42d5ffd-0a6c-47f5-8cb8-bcddc93bf5e7
+def get_top_ngrams(corpus, n=None, top_n=10):
+    """
+    Inputs: 
+    - corpus : column from your df with all your text. Each row can be a sentence.
+    - n=None : n of ngrams to return, e.g. n=2 for bi-grams.
+    - top_n = 10 : how many of the most frequently occuring n-grams would you like to return? e.g. top_n = 5 just to get the top 5
+    Example: 
+    top_n_bigrams = get_top_ngram(segment_df['segment_text'], 2, top_n=15)
+    Then you can rearrange it to put it into a graph as so:
+    x, y = map(list, zip(*top_n_bigrams))
+    """
+    vec = CountVectorizer(ngram_range = (n, n)).fit(corpus) # set up the CountVectorizer w.r.t. n
+    
+    bag_of_words = vec.transform(corpus) # sparse matrix of headlines & n-grams
+    
+    sum_words = bag_of_words.sum( axis = 0 ) # for each n-gram, sum of rows it appears in(?)
+    
+    words_freq = [(word, sum_words[0, idx]) 
+                  for word, idx in vec.vocabulary_.items()] 
+    # vocabulary_.items() is a dict of bigram : feature index
+    # sum_words is in the same order so we can use vocabulary_.items() index
+    # to access the sum_words object and grab the total occurrences
+    # Thus words_freq lists each word and the total occurrences
+    
+    words_freq = sorted(words_freq, key = lambda x: x[1], reverse=True) # sorting by frequency
+    return words_freq[:top_n]
