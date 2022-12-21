@@ -252,3 +252,88 @@ def get_top_ngrams(corpus, n=None, top_n=10):
     
     words_freq = sorted(words_freq, key = lambda x: x[1], reverse=True) # sorting by frequency
     return words_freq[:top_n]
+
+
+
+
+
+
+
+###-------------------------------------------------------------------------------------###
+
+
+
+def get_annots_for_each_sentence(segment_annotations = None, list_of_practices = None):
+    """
+    This function creates a DataFrame containing every sentence from every privacy policy (one sentence per row), 
+    with columns for each annotation.
+    
+    Steps in this function:
+    1. Create an initial DataFrame with just one row, consisting of one sentence plus metadata columns
+    2. Append rows to it until every sentence has been added
+    3. Add and populate the annotation columns
+    
+    Inputs:
+    - segment_annotations: DataFrame created in the previous notebook, where each row is a segment
+    - list_of_practices: A list of every different concatenated annotation
+    (annotation of the privacy practice and whether it is 1st party or 3rd party, e.g. 'Contact_E_Mail_Address_1stParty' and 'Location_GPS_1stParty')
+    
+    Outputs:
+    all_annot_sentence_df_annots: resulting DataFrame containing: 
+    - a sentence from a policy, 
+    - metadata about where the sentence came from, and 
+    - that sentence's annotations.
+    This only has the sentences that were annotated.
+    """
+    
+    if not isinstance(segment_annotations, pd.DataFrame):
+        segment_annotations = pd.read_pickle('objects/segment_annotations.pkl')
+    if list_of_practices == None:
+        list_of_practice_groups = get_list_of_practice_groups()
+        list_of_practices = [practice for practice_group in list_of_practice_groups for practice in practice_group]
+    
+    # 1. Create an initial DataFrame with just one row, consisting of one sentence plus metadata columns
+    
+    row = 2 # initialise by starting at row 2, which is the first row with annotated sentences
+
+    # Creating a df at the sentence level by expanding the sentence annotations within the segment annotations df. 
+    # This creates a DataFrame with two columns: sentence, and annotations (a dictionary of annotations for the sentence)
+    these_sentences = json_normalize(segment_annotations.at[row, 'sentences']) 
+    
+    # Now appending all policy meta data to the sentences
+    these_sentences["source_policy_number"] = segment_annotations.at[row,"source_policy_number"] 
+    these_sentences["policy_type"] = segment_annotations.at[row,"policy_type"]
+    these_sentences["contains_synthetic"] = segment_annotations.at[row,"contains_synthetic"]
+    these_sentences["policy_segment_id"] = segment_annotations.at[row,"policy_segment_id"]
+    # re-ordering the columns
+    these_sentences = these_sentences[['source_policy_number', 'policy_type', 'contains_synthetic', 'policy_segment_id', 'sentence_text', 'annotations']]
+    
+    # 2. Append rows until every sentence has been added
+    
+    all_annot_sentence_df = these_sentences.copy()
+    
+    for row in range(len(segment_annotations)):
+        next_sentences = 0
+        if segment_annotations.loc[row, 'sentences'] != []:
+            next_sentences = json_normalize(segment_annotations.at[row, 'sentences'])
+            next_sentences["source_policy_number"] = segment_annotations.at[row,"source_policy_number"]
+            next_sentences["policy_type"] = segment_annotations.at[row,"policy_type"]
+            next_sentences["contains_synthetic"] = segment_annotations.at[row,"contains_synthetic"]
+            next_sentences["policy_segment_id"] = segment_annotations.at[row,"policy_segment_id"]
+            next_sentences = next_sentences[['source_policy_number', 'policy_type', 'contains_synthetic', 'policy_segment_id', 'sentence_text', 'annotations']]
+            all_annot_sentence_df = pd.concat([all_annot_sentence_df, next_sentences], axis = 0)
+    all_annot_sentence_df.reset_index(drop=True, inplace=True)
+    print(f"The shape of the DataFrame with annotated sentences is {all_annot_sentence_df.shape}")
+    
+    # 3. Add and populate the annotation columns
+    
+    # add the empty annotation columns
+    all_annot_sentence_df_annots = add_empty_annotation_columns(all_annot_sentence_df, list_of_practices)
+
+    # populate the columns with the annotations
+    for index in range(len(all_annot_sentence_df_annots)):
+        practices_dictionaries = all_annot_sentence_df_annots.loc[index, 'annotations']
+        for each_practice in practices_dictionaries:
+            all_annot_sentence_df_annots.loc[index, each_practice['practice']] += 1
+    
+    return all_annot_sentence_df_annots
