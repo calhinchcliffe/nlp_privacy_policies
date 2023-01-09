@@ -337,3 +337,57 @@ def get_annots_for_each_sentence(segment_annotations = None, list_of_practices =
             all_annot_sentence_df_annots.loc[index, each_practice['practice']] += 1
     
     return all_annot_sentence_df_annots
+
+
+
+
+
+
+
+
+
+
+###-------------------------------------------------------------------------------------###
+
+
+
+
+def sentence_filtering(X, y, df_filter, sf_filter, balanced_downsize_filter):
+    """
+    Filter the X and y data using Sentence Filtering, 
+    or if this leaves too few data, filter using balanced downsize filtering.
+    
+    Inputs: 
+        X: X data
+        y: y data
+        df_filter:  a filter (boolean series) to use to filter the data. 
+                    Intended to be sf_filter (sentence filtering)
+                    or balanced_downzise_filter (all the positive cases plus an equally sized random sample of negative cases)
+        sf_filter:  the sentence filtering filter for the classifier being trained
+                    Intended to be sf_filter = ((X[classifier_features] > 0).sum(axis=1) > 0 )
+        balanced_downsize_filter: For filtering to all the positive cases plus an equally sized random sample of negative cases.
+                    Intended to be balanced_downzise_filter = (
+                        positive_rows |
+                        negative_rows.where(negative_rows == True).dropna().sample(n=positive_rows.sum(), replace=False))
+    Outputs:
+        X2: filtered X data
+        y2: filtered y data
+    
+    """
+    
+        # filter y
+    y2 = y.loc[df_filter].copy()
+    y2.reset_index(inplace=True, drop=True)
+    
+        # filter X
+    X2 = X.loc[df_filter].copy()
+    X2.reset_index(inplace=True, drop=True)
+    
+        # check whether this sentence filtering leaves enough data (arbitrary > 75)
+        # if not, use balanced downsizing instead:
+    if df_filter.equals(sf_filter) & (
+        ( y2.value_counts().get(1, 0) < 75 ) or ( y2.value_counts().get(0, 0) < 75 )
+    ):
+        X2, y2 = sentence_filtering(X, y, balanced_downsize_filter, sf_filter, balanced_downsize_filter)
+    
+    return X2, y2
