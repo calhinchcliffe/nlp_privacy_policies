@@ -1,5 +1,5 @@
 
-# import core ds libraries
+# import core ds libraries and every library required for the functions
 import numpy as np
 import pandas as pd
 from pandas import json_normalize
@@ -8,7 +8,27 @@ import yaml
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+import sys
+import time
+from collections import defaultdict
+from collections import Counter
+
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+# modelling
+from sklearn.svm import LinearSVC
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+
+# modelling pipeline
+from tempfile import mkdtemp
+# from sklearn.pipeline import Pipeline # not required since using imbalanced learn
+from imblearn.pipeline import Pipeline 
+    # Using the pipeline from the imbalanced learn library since it allows for sampling
+from imblearn import FunctionSampler
+from sklearn.compose import ColumnTransformer
+from sklearn.model_selection import GridSearchCV
 
 
 def load_all_policies():
@@ -344,10 +364,9 @@ def get_annots_for_each_sentence(segment_annotations = None, list_of_practices =
 
 
 
-
-
-
 ###-------------------------------------------------------------------------------------###
+
+
 
 
 
@@ -391,3 +410,158 @@ def sentence_filtering(X, y, df_filter, sf_filter, balanced_downsize_filter):
         X2, y2 = sentence_filtering(X, y, balanced_downsize_filter, sf_filter, balanced_downsize_filter)
     
     return X2, y2
+
+
+
+
+
+
+
+
+###-------------------------------------------------------------------------------------###
+
+
+
+
+
+def full_modelling_pipeline(classifier, df_for_pipelining, df_for_evaluation, clean_annotation_features,
+                            model_results_series, col_transform_unigrams, col_transform_withbigrams):
+    
+    """
+    Inputs:
+    
+        classifier: name (exact string) of the target column to predict
+        
+        df_for_pipelining: Dataframe with text segments, classifiers and crafted features
+        
+        model_results_series:   The empty series to save the results (classifier-objects and predictions) to. 
+                                A pickle file of the same name will be saved with the results. 
+        
+        col_transform_unigrams:    for the column transformer, column transformation with column to apply to
+        
+        col_transform_withbigrams: as above
+    """
+    
+    # Step 1 – declare the classifier
+    
+    print(f"Running for classifier: {classifier}")
+    start_code_time = time.time()
+    
+    # Step 2 – Separate into X and y
+    
+    # the crafted features columns happen to be all those after and including 'contact info', so I 
+    # use every column after and including the first crafted feature, which happens to be 'contact info'
+    X = pd.concat(
+        [df_for_pipelining['segment_text'], 
+         df_for_pipelining.loc[:,'contact info':]],
+        axis=1
+    ).copy()
+
+    y = df_for_pipelining[classifier]
+    
+    # Step 3 – filter for sentence filtering to use in Pipeline
+    
+    # filtering the crafted features to get the list of features from the same row that lists the classifier
+    classifier_features = clean_annotation_features[ clean_annotation_features['annotation'] == classifier ]     \
+                            .reset_index().at[0,'features']
+    
+    # true/false boolean series for sentence filtering:
+    sf_filter = ((X[classifier_features] > 0)\
+                     .sum(axis=1) > 0 )
+    
+    # true/false boolean series for balanced downsizing filter:
+    positive_rows = (y == 1)
+    negative_rows = (y == 0)
+    balanced_downsize_filter = (
+        positive_rows |
+        negative_rows.where(negative_rows == True).dropna().sample(n=positive_rows.sum(), replace=False)
+    )
+    
+    print("Ready for grid search.")
+    
+    # Step 4 – CV Grid Search
+    
+    fitted_search = model_pipeline_step_4(X, y, sf_filter, balanced_downsize_filter, 
+                                          col_transform_unigrams, col_transform_withbigrams)
+
+    print("Ready for evaluation")
+    
+    # Step 5 – separate test (evaluation) data into X and y, run the model on them and save the results
+    
+    X_eval = pd.concat(
+        [df_for_evaluation['segment_text'], 
+         df_for_evaluation.loc[:,'contact info':]],
+        axis=1
+    ).copy()
+
+    y_eval = df_for_evaluation[classifier]
+    
+    # Running the model
+    classifier_prediction = fitted_search.predict(X_eval)
+
+    # saving the model results for future use
+    model_results_series[classifier] = [fitted_search, y_eval, classifier_prediction]
+    model_results_series.to_pickle("objects/model_results.pkl")
+    
+    # Tests
+    if type(model_results_series[classifier]) == int:
+        print("Model results not saved.")
+        raise NotSavedError("Check model results")
+    
+    print(f"The runtime for {classifier} was {round(time.time() - start_code_time, 5)}")
+    print()
+
+
+
+
+
+
+
+
+###-------------------------------------------------------------------------------------###
+
+
+
+
+
+def model_pipeline_step_4(X, y, sf_filter, balanced_downsize_filter, 
+                          col_transform_unigrams, col_transform_withbigrams):
+
+#     cachedir = mkdtemp() # Optional memory dump to help with processing
+
+    sf_kw_args = {'df_filter': sf_filter, 'sf_filter': sf_filter, 'balanced_downsize_filter': balanced_downsize_filter}
+    
+    # In the pipeline_sequences list, the syntax requires that each step is named and some value is provided,
+    # but that value will be changed as each different option is looped through in the parameter grid.
+    pipeline_sequences = [
+        ('sentence_filtering', FunctionSampler(func=sentence_filtering, validate=False, kw_args=sf_kw_args)),
+        ('tfidf', ColumnTransformer(col_transform_withbigrams, remainder='passthrough')), 
+        ('model', LogisticRegression(random_state=1, max_iter=1000))
+    ]
+
+    pipe = Pipeline(pipeline_sequences) #, memory = cachedir)
+
+    param_grid = [
+        {
+            'model': [LogisticRegression(random_state=1, max_iter=1000)],
+            'sentence_filtering': [FunctionSampler(func=sentence_filtering, validate=False, kw_args=sf_kw_args), 
+                                   None],
+            'tfidf': [ColumnTransformer(col_transform_withbigrams, remainder='passthrough'),
+                      ColumnTransformer(col_transform_unigrams, remainder='passthrough')]
+        },
+        {
+            'model': [SVC(kernel='linear', class_weight='balanced', random_state=1)],
+            'model__C': [0.1, 1, 10],
+            'sentence_filtering': [FunctionSampler(func=sentence_filtering, validate=False, kw_args=sf_kw_args), 
+                                   None],
+            'tfidf': [ColumnTransformer(col_transform_withbigrams, remainder='passthrough'),
+                      ColumnTransformer(col_transform_unigrams, remainder='passthrough')]
+        }
+    ]
+
+    # Create grid search object
+    grid_search_object = GridSearchCV(estimator=pipe, param_grid = param_grid, cv = 5, verbose=1, n_jobs=-1, scoring='f1')
+    
+    fitted_search = grid_search_object.fit(X, y)
+    
+    return fitted_search 
