@@ -20,4 +20,4 @@ The other folders and files include:
 2. Data folder containing the source data
 3. Objects folder that can be used to load cleaned data
 4. python_environment.txt for loading the python environment used for the notebooks
-5. priv_pol_funcs - a python script with functions for manipulating the data
+5. priv_policy_manipulation_functions.py - a python script with functions for manipulating the data
