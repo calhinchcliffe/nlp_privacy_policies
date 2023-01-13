@@ -2,7 +2,7 @@
 
 This project seeks to identify data practices described by app developers in their data privacy policy.  Using natural language processing and machine learning, can we summarise key information found in a privacy policy?
 
-Read the [Executive Report](/"Executive Report.pdf").
+Read the [Executive Report](./Executive\ Report.pdf).
 
 This project looks at work done by UsablePrivacy.org in using machine learning to extract information from privacy policies, specifically described in this paper: Story et al. 2019, available [here](https://usableprivacy.org/static/files/story_pal_2019.pdf). 
 
